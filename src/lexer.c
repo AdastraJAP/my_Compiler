@@ -4,51 +4,7 @@
 #include <string.h>
 #include <stdarg.h>
 
-typedef enum {
-    TK_INT,
-    TK_IF,
-    TK_ELSE,
-    TK_WHILE,
-    TK_RETURN,
-
-    TK_NUMBER,
-    TK_IDENT,
-
-    TK_PLUS,
-    TK_MINUS,
-    TK_STAR,
-    TK_SLASH,
-
-    TK_EQ,
-    TK_NEQ,
-    TK_LT,
-    TK_GT,
-    TK_LEQ,
-    TK_GEQ,
-    TK_ASSIGN,
-
-    TK_LPAREN,
-    TK_RPAREN,
-    TK_LBRACE,
-    TK_RBRACE,
-    TK_SEMI,
-    TK_COMMA,
-
-    TK_EOF
-} Tokentype;
-
-typedef struct {
-    Tokentype type;
-    const char *start;
-    int len;
-    int line;
-} Token;
-
-typedef struct {
-    Token *data;
-    int count;
-    int cap;
-} TokenList;
+#include "../include/lexer.h"
 
 typedef struct {
     const char *src;
@@ -101,7 +57,7 @@ static void fatal(const char *filename, int line, const char *fmt, ...) {
     exit(1);
 }
 
-static void tl_init(TokenList *tl) {
+static void token_list_init(TokenList *tl) {
     tl->cap = 64;
     tl->count = 0;
     tl->data = malloc((size_t)tl->cap * sizeof(Token));
@@ -111,7 +67,7 @@ static void tl_init(TokenList *tl) {
     }
 }
 
-static void tl_push(TokenList *tl, Token tok) {
+static void token_list_push(TokenList *tl, Token tok) {
     if (tl->count == tl->cap) {
         tl->cap *= 2;
         tl->data = realloc(tl->data, (size_t)tl->cap * sizeof(Token));
@@ -124,7 +80,7 @@ static void tl_push(TokenList *tl, Token tok) {
     tl->data[tl->count++] = tok;
 }
 
-static void tl_free(TokenList *tl) {
+void token_list_free(TokenList *tl) {
     free(tl->data);
     tl->data = NULL;
     tl->count = 0;
@@ -162,7 +118,7 @@ static void emit(Lexer *l, Tokentype type, const char *start, int len) {
     t.start = start;
     t.len = len;
     t.line = l->line;
-    tl_push(l->out, t);
+    token_list_push(l->out, t);
 }
 
 static Tokentype check_keyword(const char *start, int len) {
@@ -255,11 +211,11 @@ static void scan_one(Lexer *l) {
     fatal(l->filename, l->line, "unexpected character '%c'", c);
 }
 
-static TokenList lex_source(const char *src, const char *filename) {
+TokenList lex(const char *src, const char *filename) {
     TokenList tl;
     Lexer l;
 
-    tl_init(&tl);
+    token_list_init(&tl);
 
     l.src = src;
     l.cur = src;
@@ -274,7 +230,7 @@ static TokenList lex_source(const char *src, const char *filename) {
     return tl;
 }
 
-static void dump_tokens(const TokenList *tl) {
+void dump_tokens(const TokenList *tl) {
     int i;
 
     printf("%-6s  %-12s  %s\n", "LINE", "TYPE", "TEXT");
@@ -288,71 +244,4 @@ static void dump_tokens(const TokenList *tl) {
                t->len,
                t->start);
     }
-}
-
-static char *read_file(const char *path) {
-    FILE *fp;
-    long size;
-    char *buffer;
-
-    fp = fopen(path, "rb");
-    if (!fp) {
-        fprintf(stderr, "could not open file: %s\n", path);
-        exit(1);
-    }
-
-    if (fseek(fp, 0, SEEK_END) != 0) {
-        fclose(fp);
-        fprintf(stderr, "could not seek file: %s\n", path);
-        exit(1);
-    }
-
-    size = ftell(fp);
-    if (size < 0) {
-        fclose(fp);
-        fprintf(stderr, "could not get file size: %s\n", path);
-        exit(1);
-    }
-
-    if (fseek(fp, 0, SEEK_SET) != 0) {
-        fclose(fp);
-        fprintf(stderr, "could not rewind file: %s\n", path);
-        exit(1);
-    }
-
-    buffer = malloc((size_t)size + 1);
-    if (!buffer) {
-        fclose(fp);
-        fprintf(stderr, "fatal: out of memory\n");
-        exit(1);
-    }
-
-    if (fread(buffer, 1, (size_t)size, fp) != (size_t)size) {
-        free(buffer);
-        fclose(fp);
-        fprintf(stderr, "could not read file: %s\n", path);
-        exit(1);
-    }
-
-    buffer[size] = '\0';
-    fclose(fp);
-    return buffer;
-}
-
-int main(int argc, char **argv) {
-    char *source;
-    TokenList tokens;
-
-    if (argc != 2) {
-        fprintf(stderr, "usage: %s <source-file>\n", argv[0]);
-        return 1;
-    }
-
-    source = read_file(argv[1]);
-    tokens = lex_source(source, argv[1]);
-    dump_tokens(&tokens);
-
-    tl_free(&tokens);
-    free(source);
-    return 0;
 }
